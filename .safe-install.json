@@ -1,0 +1,14 @@
+{
+  "allowScripts": {
+    "esbuild": {
+      "version": "0.27.0",
+      "hash": "sha256-ca1453d5314dbe20fe8ca896a55a58a433dac4b296a0f749773be9bd09669b2c",
+      "at": "2026-10-31"
+    },
+    "unrs-resolver": {
+      "version": "1.12.2",
+      "hash": "sha256-8420a2063326586e4d29eba2b9b40a36e91efb42d91881eb175ef25d8b663407",
+      "at": "2026-10-31"
+    }
+  }
+}

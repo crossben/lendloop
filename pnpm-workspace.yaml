@@ -1,0 +1,6 @@
+minimumReleaseAgeExclude:
+  - '@clerk/backend@3.26.5'
+  - '@clerk/nextjs@7.9.23'
+  - '@clerk/react@6.18.4'
+  - '@clerk/shared@4.43.1'
+  - convex@1.49.0

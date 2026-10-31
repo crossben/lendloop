@@ -1,0 +1,27 @@
+node_modules/
+.next/
+out/
+build/
+dist/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+
+# Local environment files (never commit real secrets)
+.env
+.env.local
+.env.*.local
+!.env.example
+!convex/.env.example
+!n8n/.env.example
+
+# Convex local state
+.convex/
+
+# n8n local state
+n8n/.n8n/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
