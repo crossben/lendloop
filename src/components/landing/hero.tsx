@@ -17,10 +17,10 @@ export function Hero() {
   return (
     <section className="hero-glow relative isolate overflow-hidden border-b border-line">
       <Container className="flex flex-col items-center py-20 text-center sm:py-28">
-        <span className="inline-flex items-center gap-2 rounded-full border border-line bg-surface/80 px-3 py-1 text-xs font-medium text-muted">
+        {/* <span className="inline-flex items-center gap-2 rounded-full border border-line bg-surface/80 px-3 py-1 text-xs font-medium text-muted">
           <span className="size-1.5 rounded-full bg-accent" aria-hidden />
           The neighborhood tool shelf
-        </span>
+        </span> */}
 
         <h1 className="mt-7 max-w-4xl text-[clamp(2.6rem,7vw,5rem)] font-semibold leading-[0.99] tracking-[-0.045em] text-balance text-ink">
           Borrow what you need.
