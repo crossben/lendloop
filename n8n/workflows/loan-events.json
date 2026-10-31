@@ -1,0 +1,205 @@
+{
+  "id": "LLloanEvents0001",
+  "name": "LendLoop — Loan event notifications",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lendloop/loan-events",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "id": "a1000000-0000-4000-8000-000000000001",
+      "name": "Loan event webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "c1000000-0000-4000-8000-000000000001"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Verify the HMAC before reading the payload or doing any work.\n// Canonical message: `${timestamp}.${rawBody}` (matches Convex lib/hmac.ts).\nconst crypto = require('crypto');\n\nconst item = $input.first().json;\nconst headers = item.headers || {};\nconst header = (name) => {\n  const key = Object.keys(headers).find((candidate) => candidate.toLowerCase() === name);\n  return key ? headers[key] : undefined;\n};\n\nconst rawBody =\n  typeof item.body === 'string'\n    ? item.body\n    : typeof Buffer !== \"undefined\" && Buffer.isBuffer(item.body)\n      ? item.body.toString('utf8')\n      : JSON.stringify(item.body ?? {});\n\nconst timestamp = String(header('x-lendloop-timestamp') || '');\nconst provided = String(header('x-lendloop-signature') || '')\n  .trim()\n  .toLowerCase()\n  .replace(/^sha256=/, '');\nconst secret = $env.LENDLOOP_HMAC_SECRET;\n\nif (!secret) {\n  return [{ json: { valid: false, reason: 'missing_secret' } }];\n}\nif (!/^\\d{1,12}$/.test(timestamp)) {\n  return [{ json: { valid: false, reason: 'invalid_timestamp' } }];\n}\n\nconst now = Math.floor(Date.now() / 1000);\nif (Math.abs(now - Number(timestamp)) > 300) {\n  return [{ json: { valid: false, reason: 'stale_timestamp' } }];\n}\nif (!/^[0-9a-f]{64}$/.test(provided)) {\n  return [{ json: { valid: false, reason: 'invalid_signature_format' } }];\n}\n\nconst expected = crypto\n  .createHmac('sha256', secret)\n  .update(`${timestamp}.${rawBody}`)\n  .digest('hex');\n\nconst expectedBuffer = Buffer.from(expected, 'utf8');\nconst providedBuffer = Buffer.from(provided, 'utf8');\nconst valid =\n  expectedBuffer.length === providedBuffer.length &&\n  crypto.timingSafeEqual(expectedBuffer, providedBuffer);\n\nif (!valid) {\n  return [{ json: { valid: false, reason: 'invalid_signature' } }];\n}\n\nlet payload;\ntry {\n  payload = JSON.parse(rawBody);\n} catch {\n  return [{ json: { valid: false, reason: 'invalid_json' } }];\n}\n\nreturn [{ json: { valid: true, payload } }];"
+      },
+      "id": "a1000000-0000-4000-8000-000000000002",
+      "name": "Verify HMAC",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a1000000-0000-4000-8000-000000000003-condition",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1000000-0000-4000-8000-000000000003",
+      "name": "Signature valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Rebuild the payload explicitly. Unknown fields are dropped (data minimisation).\nconst events = ['requested', 'approved', 'declined', 'returned'];\nconst p = $json.payload;\n\nconst text = (value, max) => {\n  if (typeof value !== 'string') return null;\n  const trimmed = value.trim();\n  if (!trimmed || trimmed.length > max) return null;\n  return trimmed;\n};\nconst date = (value) => (typeof value === 'string' && /^\\d{4}-\\d{2}-\\d{2}$/.test(value) ? value : null);\n\nconst event = typeof p?.event === 'string' && events.includes(p.event) ? p.event : null;\nconst loanId = text(p?.loanId, 64);\nconst toolName = text(p?.toolName, 80);\nconst startDate = date(p?.startDate);\nconst endDate = date(p?.endDate);\nconst recipientName = text(p?.recipient?.firstName, 80);\nconst recipientEmail = text(p?.recipient?.email, 254);\nconst counterpartyName = text(p?.counterpartyFirstName, 80);\n\nif (!event || !loanId || !toolName || !startDate || !endDate) {\n  throw new Error('Invalid loan event payload: missing required fields');\n}\nif (!recipientEmail || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(recipientEmail)) {\n  throw new Error('Invalid loan event payload: recipient email');\n}\n\nreturn [\n  {\n    json: {\n      event,\n      loanId,\n      toolName,\n      startDate,\n      endDate,\n      recipient: { firstName: recipientName || 'Neighbor', email: recipientEmail },\n      counterpartyFirstName: counterpartyName || 'Neighbor',\n    },\n  },\n];"
+      },
+      "id": "a1000000-0000-4000-8000-000000000004",
+      "name": "Normalize payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Mock delivery: a logged notification is explicitly acceptable for this task.\n// Swap this node for an Email/Slack node to deliver for real (see README).\nconst n = $json;\nconst labels = {\n  requested: 'new borrow request',\n  approved: 'request approved',\n  declined: 'request declined',\n  returned: 'tool returned',\n};\nconst subject = `LendLoop: ${labels[n.event]} — ${n.toolName}`;\nconst body =\n  n.event === 'requested'\n    ? `Hi ${n.recipient.firstName}, ${n.counterpartyFirstName} would like to borrow your ${n.toolName} from ${n.startDate} to ${n.endDate}.`\n    : `Hi ${n.recipient.firstName}, your request for ${n.toolName} (${n.startDate} to ${n.endDate}) is now ${n.event}.`;\n\nconst [localPart, domain] = n.recipient.email.split('@');\nconst maskedEmail = `${localPart.slice(0, 1)}***@${domain}`;\nconsole.log(`[LendLoop][notification] ${subject} -> ${maskedEmail}`);\n\nreturn [{ json: { ok: true, event: n.event, loanId: n.loanId, channel: 'log' } }];"
+      },
+      "id": "a1000000-0000-4000-8000-000000000005",
+      "name": "Log notification (mock)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, event: $json.event, loanId: $json.loanId, channel: $json.channel }) }}",
+        "options": {}
+      },
+      "id": "a1000000-0000-4000-8000-000000000006",
+      "name": "Respond 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1100,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, error: 'unauthorized', reason: $json.reason || 'invalid_signature' }) }}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "id": "a1000000-0000-4000-8000-000000000007",
+      "name": "Respond 401",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        120
+      ]
+    }
+  ],
+  "connections": {
+    "Loan event webhook": {
+      "main": [
+        [
+          {
+            "node": "Verify HMAC",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify HMAC": {
+      "main": [
+        [
+          {
+            "node": "Signature valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Signature valid?": {
+      "main": [
+        [
+          {
+            "node": "Normalize payload",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 401",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize payload": {
+      "main": [
+        [
+          {
+            "node": "Log notification (mock)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log notification (mock)": {
+      "main": [
+        [
+          {
+            "node": "Respond 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "LLerrorHandler01",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "LLloanEventsV001",
+  "meta": {},
+  "tags": [],
+  "pinData": {}
+}

@@ -1,0 +1,53 @@
+{
+  "id": "LLerrorHandler01",
+  "name": "LendLoop — Error handler",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "c3000000-0000-4000-8000-000000000001",
+      "name": "On workflow error",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Receives n8n's Error Trigger payload. Logs a single structured line; no secrets.\nconst data = $input.first().json;\nconst execution = data.execution || {};\nconst workflow = data.workflow || {};\nconst error = execution.error || data.trigger?.error || {};\n\nconst record = {\n  source: 'n8n-error-workflow',\n  workflowId: workflow.id || null,\n  workflowName: workflow.name || 'unknown',\n  node: execution.lastNodeExecuted || 'unknown',\n  error: typeof error.message === 'string' ? error.message : String(error),\n  executionId: execution.id || null,\n  executionUrl: execution.url || null,\n  at: new Date().toISOString(),\n};\n\nconsole.error(`[LendLoop][workflow-error] ${JSON.stringify(record)}`);\nreturn [{ json: record }];"
+      },
+      "id": "c3000000-0000-4000-8000-000000000002",
+      "name": "Log failure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "On workflow error": {
+      "main": [
+        [
+          {
+            "node": "Log failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "LLerrorVers00001",
+  "meta": {},
+  "tags": [],
+  "pinData": {}
+}
